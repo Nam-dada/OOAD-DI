@@ -11,6 +11,7 @@ public class BeanFactoryImpl implements BeanFactory {
 
     private Properties injectPro = new Properties();
     private Properties valuePro = new Properties();
+
     @Override
     public void loadInjectProperties(File file) {
         try {
@@ -34,22 +35,21 @@ public class BeanFactoryImpl implements BeanFactory {
 
     @Override
     public <T> T createInstance(Class<T> clazz) {
-        T ans;
+        T ans = null;
         Class<T> tempClaz = clazz;
         try {
-            tempClaz = (Class<T>) Class.forName(injectPro.getProperty(clazz.getName()));
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
+            tempClaz = (Class<T>) Class.forName(injectPro.getProperty(tempClaz.getName()));
+        } catch (Exception e) {
         }
 
         Constructor<T> cons = null;
-        for (Constructor c : tempClaz.getDeclaredConstructors()){
+        for (Constructor c : tempClaz.getDeclaredConstructors()) {
             if (c.getAnnotation(Inject.class) != null) {
                 cons = c;
                 break;
             }
         }
-        if (cons == null){
+        if (cons == null) {
             try {
                 cons = tempClaz.getDeclaredConstructor();
             } catch (NoSuchMethodException e) {
@@ -61,7 +61,7 @@ public class BeanFactoryImpl implements BeanFactory {
         Parameter[] cons_Parameter = cons.getParameters();
         Object[] para_obj = new Object[cons_fieldType.length];
 
-        Class tempClass;
+        Class<?> tempClass;
         Parameter tempPara;
         for (int i = 0; i < cons_fieldType.length; i++) {
             tempClass = cons_fieldType[i];
@@ -69,19 +69,57 @@ public class BeanFactoryImpl implements BeanFactory {
 
             if (tempPara.getAnnotation(Value.class) == null) {
                 para_obj[i] = createInstance(tempClass);
-            }else {
+            } else {
                 Value valueAnnotation = tempPara.getAnnotation(Value.class);
-
+                if (tempClass == List.class || tempClass == Set.class || tempClass == Map.class) {
+                    ParameterizedType pt = (ParameterizedType) tempPara.getParameterizedType();
+                    para_obj[i] = dealByType(valueAnnotation, tempClass, pt);
+                } else {
+                    para_obj[i] = dealByType(valueAnnotation, tempClass);
+                }
             }
         }
+
+        try {
+            ans = cons.newInstance(para_obj);
+            Field[] typeFields = ans.getClass().getDeclaredFields();
+            for (Field tf : typeFields) {
+                if (tf.getAnnotation(Inject.class) != null) {
+                    tf.setAccessible(true);
+                    tf.set(ans, createInstance(tf.getType()));
+                    tf.setAccessible(false);
+                }
+
+                if (tf.getAnnotation(Value.class) != null) {
+                    Value valueAnnotation = tf.getAnnotation(Value.class);
+                    tf.setAccessible(true);
+                    Class<?> fieldClass = tf.getType();
+                    if (fieldClass == List.class || fieldClass == Set.class || fieldClass == Map.class) {
+                        ParameterizedType pt = (ParameterizedType) tf.getGenericType();
+                        tf.set(ans, dealByType(valueAnnotation, fieldClass, pt));
+                    }else {
+                        tf.set(ans, dealByType(valueAnnotation, fieldClass));
+                    }
+                    tf.setAccessible(false);
+                }
+            }
+
+            return ans;
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+
 
         return null;
     }
 
-    private <T> Object dealByType(Parameter tempPara, Class<T> type){
-        Value valueAnnotation = tempPara.getAnnotation(Value.class);
+    private <T> Object dealByType(Value valueAnnotation, Class<T> type) {
         String tar = valueAnnotation.value();
         if (valuePro.containsKey(tar)) tar = (String) valuePro.get(tar);
+        tar = tar.replace("[", "");
+        tar = tar.replace("]", "");
+        tar = tar.replace("{", "");
+        tar = tar.replace("}", "");
         String[] tarList = tar.split(valueAnnotation.delimiter());
 
         if (int.class == type) {
@@ -90,26 +128,26 @@ public class BeanFactoryImpl implements BeanFactory {
                 return Integer.parseInt(s);
             }
             return 0;
-        }else if (String.class == type) {
+        } else if (String.class == type) {
             return tarList[0];
-        }else if (boolean.class == type) {
-            for (String s : tarList){
+        } else if (boolean.class == type) {
+            for (String s : tarList) {
                 if (isType(s, type)) return Boolean.parseBoolean(s);
             }
             return false;
-        }else if (boolean[].class == type) {
+        } else if (boolean[].class == type) {
             List<String> list = new ArrayList<>();
-            for (String s : tarList){
+            for (String s : tarList) {
                 if (isType(s, boolean.class))
                     list.add(s);
             }
 
-            Boolean[] temp = new Boolean[list.size()];
+            boolean[] temp = new boolean[list.size()];
             for (int i = 0; i < temp.length; i++) {
                 temp[i] = Boolean.parseBoolean(list.get(i));
             }
             return temp;
-        }else if (int[].class == type) {
+        } else if (int[].class == type) {
             List<Integer> list = new ArrayList<>();
             for (String s : tarList) {
                 if (!isType(s, int.class)) continue;
@@ -121,73 +159,82 @@ public class BeanFactoryImpl implements BeanFactory {
                 temp[i] = list.get(i);
             }
             return temp;
-        }else if (String[].class == type) {
+        } else if (String[].class == type) {
             return tarList;
-        }else{
-            try {
-                if (List.class == type) {
-                    Class<?> listType = Class.forName(((ParameterizedType) tempPara.getParameterizedType())
-                            .getActualTypeArguments()[0].getTypeName());
-                    List<Object> temp = new ArrayList<>();
-                    for (String s : tarList){
-                        if (isType(s, listType)) {
-                            if (listType == boolean.class) {
-                                temp.add(Boolean.parseBoolean(s));
-                            }else {
-                                temp.add(s);
-                            }
-                        }
-                    }
-                    return temp;
-                }else if (Set.class == type) {
-                    Class<?> setType = Class.forName(((ParameterizedType) tempPara.getParameterizedType())
-                            .getActualTypeArguments()[0].getTypeName());
-                    Set<Object> temp = new HashSet<>();
-                    for (String s : tarList){
-                        if (isType(s, setType)) {
-                            if (setType == boolean.class) {
-                                temp.add(Boolean.parseBoolean(s));
-                            }else {
-                                temp.add(s);
-                            }
-                        }
-                    }
-                    return temp;
-                }else if (Map.class == type) {
-                    Class<?> keyType = Class.forName(((ParameterizedType) tempPara.getParameterizedType())
-                            .getActualTypeArguments()[0].getTypeName());
-                    Class<?> valueType = Class.forName(((ParameterizedType) tempPara.getParameterizedType())
-                            .getActualTypeArguments()[1].getTypeName());
-                    Map<Object, Object> temp = new LinkedHashMap<>();
+        }
 
-                    boolean keyBol = keyType == boolean.class;
-                    boolean valBol = valueType == boolean.class;
-                    for (String s : tarList) {
-                        String key = s.split(":")[0];
-                        String value = s.split(":")[1];
-                        if (isType(key, keyType) && isType(value, valueType)) {
-                            Object o = (keyBol) ? Boolean.parseBoolean(key) : key;
-                            Object o1 = (valBol) ? Boolean.parseBoolean(value) : value;
-                            temp.put(o, o1);
-                        }
+        return null;
+    }
+
+    private <T> Object dealByType(Value valueAnnotation, Class<T> type, ParameterizedType pt) {
+        String tar = valueAnnotation.value();
+        if (valuePro.containsKey(tar)) tar = (String) valuePro.get(tar);
+        tar = tar.replace("[", "");
+        tar = tar.replace("]", "");
+        tar = tar.replace("{", "");
+        tar = tar.replace("}", "");
+        String[] tarList = tar.split(valueAnnotation.delimiter());
+
+        try {
+            if (List.class == type) {
+                Class<?> listType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
+                List<Object> temp = new ArrayList<>();
+                for (String s : tarList) {
+                    if (isType(s, listType)) {
+                        if (listType == boolean.class) temp.add(Boolean.parseBoolean(s));
+                        else temp.add(s);
                     }
-                    return temp;
                 }
-            }catch (Exception e){
+                return temp;
+            } else if (Set.class == type) {
+                Class<?> setType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
+                Set<Object> temp = new HashSet<>();
+                for (String s : tarList) {
+                    if (isType(s, setType)) {
+                        if (setType == boolean.class) temp.add(Boolean.parseBoolean(s));
+                        else temp.add(s);
+                    }
+                }
+                return temp;
+            } else if (Map.class == type) {
+                Class<?> keyType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
+                Class<?> valueType = Class.forName(pt.getActualTypeArguments()[1].getTypeName());
+                Map<Object, Object> temp = new LinkedHashMap<>();
 
+                boolean keyBol = keyType == boolean.class;
+                boolean valBol = valueType == boolean.class;
+                boolean keyInt = keyType == Integer.class;
+                boolean valInt = valueType == Integer.class;
+                for (String s : tarList) {
+                    String key = s.split(":")[0];
+                    String value = s.split(":")[1];
+                    if (isType(key, keyType) && isType(value, valueType)) {
+                        Object o = (keyBol) ? Boolean.parseBoolean(key) : key;
+                        Object o1 = (valBol) ? Boolean.parseBoolean(value) : value;
+                        o = (keyInt) ? Integer.valueOf(key) : o;
+                        o1 = (valInt) ? Integer.valueOf(value) : o1;
+                        temp.put(o, o1);
+                    }
+                }
+                return temp;
             }
+        } catch (Exception e) {
+
         }
         return null;
     }
 
-    private <T> boolean isType(String s, Class<T> type) {
-        if (int.class == type) {
+    private boolean isType(String s, Class type) {
+        if (int.class == type || Integer.class == type) {
+            boolean isNegative = s.charAt(0) == '-';
+            if (isNegative) s = s.substring(1);
             if (s.length() > 10 || !s.matches("^\\d+$")) return false;
-            Long i = Long.parseLong(s);
+            long i = Long.parseLong(s);
+            if (isNegative) i = -i;
             if (Integer.MIN_VALUE <= i && i <= Integer.MAX_VALUE) return true;
-        }else if (String.class == type) {
+        } else if (String.class == type) {
             return true;
-        }else if (boolean.class == type) {
+        } else if (boolean.class == type || Boolean.class == type) {
             return s.matches("^[trueTRUE]{4}$") || s.matches("^[falseFALSE]{5}$");
         }
         return false;
