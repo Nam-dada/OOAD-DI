@@ -180,20 +180,14 @@ public class BeanFactoryImpl implements BeanFactory {
                 Class<?> listType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
                 List<Object> temp = new ArrayList<>();
                 for (String s : tarList) {
-                    if (isType(s, listType)) {
-                        if (listType == boolean.class) temp.add(Boolean.parseBoolean(s));
-                        else temp.add(s);
-                    }
+                    if (isType(s, listType)) temp.add(parseType(s, listType));
                 }
                 return temp;
             } else if (Set.class == type) {
                 Class<?> setType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
                 Set<Object> temp = new HashSet<>();
                 for (String s : tarList) {
-                    if (isType(s, setType)) {
-                        if (setType == boolean.class) temp.add(Boolean.parseBoolean(s));
-                        else temp.add(s);
-                    }
+                    if (isType(s, setType)) temp.add(parseType(s, setType));
                 }
                 return temp;
             } else if (Map.class == type) {
@@ -201,20 +195,11 @@ public class BeanFactoryImpl implements BeanFactory {
                 Class<?> valueType = Class.forName(pt.getActualTypeArguments()[1].getTypeName());
                 Map<Object, Object> temp = new LinkedHashMap<>();
 
-                boolean keyBol = keyType == boolean.class;
-                boolean valBol = valueType == boolean.class;
-                boolean keyInt = keyType == Integer.class;
-                boolean valInt = valueType == Integer.class;
                 for (String s : tarList) {
                     String key = s.split(":")[0];
                     String value = s.split(":")[1];
-                    if (isType(key, keyType) && isType(value, valueType)) {
-                        Object o = (keyBol) ? Boolean.parseBoolean(key) : key;
-                        Object o1 = (valBol) ? Boolean.parseBoolean(value) : value;
-                        o = (keyInt) ? Integer.valueOf(key) : o;
-                        o1 = (valInt) ? Integer.valueOf(value) : o1;
-                        temp.put(o, o1);
-                    }
+                    if (isType(key, keyType) && isType(value, valueType))
+                        temp.put(parseType(key, keyType), parseType(value, valueType));
                 }
                 return temp;
             }
@@ -224,7 +209,13 @@ public class BeanFactoryImpl implements BeanFactory {
         return null;
     }
 
-    private boolean isType(String s, Class type) {
+    private <T> Object parseType(String s, Class<T> type) {
+        if (type == boolean.class) return Boolean.parseBoolean(s);
+        else if (type == Integer.class) return Integer.valueOf(s);
+        else return s;
+    }
+
+    private <T> boolean isType(String s, Class<T> type) {
         if (int.class == type || Integer.class == type) {
             boolean isNegative = s.charAt(0) == '-';
             if (isNegative) s = s.substring(1);
