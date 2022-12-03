@@ -210,7 +210,7 @@ public class BeanFactoryImpl implements BeanFactory {
     }
 
     private <T> Object parseType(String s, Class<T> type) {
-        if (type == boolean.class) return Boolean.parseBoolean(s);
+        if (type == Boolean.class) return Boolean.valueOf(s);
         else if (type == Integer.class) return Integer.valueOf(s);
         else return s;
     }
@@ -226,7 +226,10 @@ public class BeanFactoryImpl implements BeanFactory {
         } else if (String.class == type) {
             return true;
         } else if (boolean.class == type || Boolean.class == type) {
-            return s.matches("^[trueTRUE]{4}$") || s.matches("^[falseFALSE]{5}$");
+            if (s.length() == 4 || s.length() == 5){
+                String temp = s.toUpperCase();
+                return temp.equals("TRUE") || temp.equals("FALSE");
+            }
         }
         return false;
     }
