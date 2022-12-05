@@ -116,10 +116,13 @@ public class BeanFactoryImpl implements BeanFactory {
     private <T> Object dealByType(Value valueAnnotation, Class<T> type) {
         String tar = valueAnnotation.value();
         if (valuePro.containsKey(tar)) tar = (String) valuePro.get(tar);
-        tar = tar.replace("[", "");
-        tar = tar.replace("]", "");
-        tar = tar.replace("{", "");
-        tar = tar.replace("}", "");
+        if (type == int[].class || type == String[].class || type == boolean[].class){
+            tar = tar.replace("[", "");
+            tar = tar.replace("]", "");
+            tar = tar.replace("{", "");
+            tar = tar.replace("}", "");
+        }
+
         String[] tarList = tar.split(valueAnnotation.delimiter());
 
         if (int.class == type) {
