@@ -123,7 +123,10 @@ public class BeanFactoryImpl implements BeanFactory {
             tar = tar.replace("}", "");
         }
 
-        String[] tarList = tar.split(valueAnnotation.delimiter());
+        String[] tarList = new String[0];
+        if (!tar.equals("")){
+            tarList = tar.split(valueAnnotation.delimiter());
+        }
 
         if (int.class == type) {
             for (String s : tarList) {
