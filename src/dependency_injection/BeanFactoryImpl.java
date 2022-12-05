@@ -115,6 +115,11 @@ public class BeanFactoryImpl implements BeanFactory {
 
     private <T> Object dealByType(Value valueAnnotation, Class<T> type) {
         String tar = valueAnnotation.value();
+        if (tar.equals("")){
+            if (type == int.class) return 0;
+            else if (type == boolean.class) return false;
+            return tar;
+        }
         if (valuePro.containsKey(tar)) tar = (String) valuePro.get(tar);
         if (type == int[].class || type == String[].class || type == boolean[].class){
             tar = tar.replace("[", "");
@@ -123,10 +128,7 @@ public class BeanFactoryImpl implements BeanFactory {
             tar = tar.replace("}", "");
         }
 
-        String[] tarList = new String[0];
-        if (!tar.equals("")){
-            tarList = tar.split(valueAnnotation.delimiter());
-        }
+        String[] tarList = tar.split(valueAnnotation.delimiter());
 
         if (int.class == type) {
             for (String s : tarList) {
@@ -166,6 +168,7 @@ public class BeanFactoryImpl implements BeanFactory {
             }
             return temp;
         } else if (String[].class == type) {
+            if (tar.equals("")) return new String[0];
             return tarList;
         }
 
@@ -185,6 +188,7 @@ public class BeanFactoryImpl implements BeanFactory {
             if (List.class == type) {
                 Class<?> listType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
                 List<Object> temp = new ArrayList<>();
+                if (tar.equals("")) return temp;
                 for (String s : tarList) {
                     if (isType(s, listType)) temp.add(parseType(s, listType));
                 }
@@ -192,6 +196,7 @@ public class BeanFactoryImpl implements BeanFactory {
             } else if (Set.class == type) {
                 Class<?> setType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
                 Set<Object> temp = new HashSet<>();
+                if (tar.equals("")) return temp;
                 for (String s : tarList) {
                     if (isType(s, setType)) temp.add(parseType(s, setType));
                 }
@@ -200,6 +205,7 @@ public class BeanFactoryImpl implements BeanFactory {
                 Class<?> keyType = Class.forName(pt.getActualTypeArguments()[0].getTypeName());
                 Class<?> valueType = Class.forName(pt.getActualTypeArguments()[1].getTypeName());
                 Map<Object, Object> temp = new LinkedHashMap<>();
+                if (tar.equals("")) return temp;
 
                 for (String s : tarList) {
                     String key = s.split(":")[0];
